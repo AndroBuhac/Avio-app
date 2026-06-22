@@ -78,6 +78,28 @@ const getTodayDateLocal = () => {
   return `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 };
 
+const isPastDate = (datum) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) {
+    return false;
+  }
+
+  return datum < getTodayDateLocal();
+};
+
+const resolveStatusZaSpremanje = (status, datumLeta) => {
+  const normalizedStatus = String(status || "").trim();
+
+  if (normalizedStatus === "otkazana" || normalizedStatus === "zavrsena") {
+    return normalizedStatus;
+  }
+
+  if (isPastDate(datumLeta)) {
+    return "zavrsena";
+  }
+
+  return normalizedStatus || "aktivna";
+};
+
 const normalizeMjesta = (value) => {
   if (!Array.isArray(value)) {
     return [];
@@ -146,6 +168,17 @@ export async function GET(request) {
         status: 401,
       });
     }
+
+    await pool.query(
+      `
+      UPDATE rezervacija
+      SET status = 'zavrsena'
+      WHERE korisnik_id = $1
+        AND status = 'aktivna'
+        AND datum_leta < CURRENT_DATE
+      `,
+      [authenticatedKorisnikId]
+    );
 
     const result = await pool.query(
       `
@@ -244,6 +277,8 @@ export async function POST(request) {
       });
     }
 
+    const statusZaSpremanje = resolveStatusZaSpremanje(status, datumLeta);
+
     if (status && !ALLOWED_STATUSI.includes(status)) {
       return new Response(
         JSON.stringify({
@@ -337,7 +372,6 @@ export async function POST(request) {
         );
       }
 
-      const statusZaSpremanje = status || "aktivna";
       const rezervacijaResult = await client.query(
         `
         INSERT INTO rezervacija (

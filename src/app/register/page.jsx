@@ -69,7 +69,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black flex items-center justify-center p-4">
+    <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
         <Link href="/" className="inline-flex items-center text-sm font-semibold text-blue-700 hover:text-blue-900 mb-4">
           ← Nazad na početnu

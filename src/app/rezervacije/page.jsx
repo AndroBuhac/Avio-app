@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/app/ProtectedRoute";
@@ -11,11 +12,34 @@ const DESTINACIJE = [
   { id: 3, grad: "Berlin", kod: "BER", cijena: 139 },
 ];
 
-const LETOVI = [
-  { id: 1, vrijeme: "08:30", povratak: "20:45" },
-  { id: 2, vrijeme: "12:00", povratak: "00:15" },
-  { id: 3, vrijeme: "16:45", povratak: "04:30" },
-];
+const RASPORED_LETOVA = {
+  0: [
+    { id: 201, destinacija_id: 2, vrijeme: "09:15", povratak: "18:20" },
+  ],
+  1: [
+    { id: 101, destinacija_id: 1, vrijeme: "08:30", povratak: "20:45" },
+    { id: 102, destinacija_id: 3, vrijeme: "17:10", povratak: "22:50" },
+  ],
+  2: [
+    { id: 103, destinacija_id: 2, vrijeme: "10:40", povratak: "23:05" },
+    { id: 104, destinacija_id: 1, vrijeme: "15:30", povratak: "21:10" },
+  ],
+  3: [
+    { id: 105, destinacija_id: 3, vrijeme: "07:50", povratak: "19:40" },
+    { id: 106, destinacija_id: 2, vrijeme: "13:25", povratak: "22:15" },
+  ],
+  4: [
+    { id: 107, destinacija_id: 1, vrijeme: "09:05", povratak: "18:30" },
+    { id: 108, destinacija_id: 3, vrijeme: "18:15", povratak: "23:55" },
+  ],
+  5: [
+    { id: 109, destinacija_id: 2, vrijeme: "08:00", povratak: "17:10" },
+    { id: 110, destinacija_id: 1, vrijeme: "14:45", povratak: "21:35" },
+  ],
+  6: [
+    { id: 111, destinacija_id: 3, vrijeme: "11:20", povratak: "20:10" },
+  ],
+};
 
 const REDOVI = [1, 2, 3, 4, 5, 6];
 const KOLONE = ["A", "B", "C", "D", "E", "F"];
@@ -28,6 +52,110 @@ const getTodayDateLocal = () => {
   return `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 };
 
+const getTomorrowDateLocal = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const pad = (value) => String(value).padStart(2, "0");
+
+  return `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}`;
+};
+
+const normalizeDateInput = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return new Date(`${trimmed}T12:00:00`);
+    }
+
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  return null;
+};
+
+const isFutureOrTodayLocal = (datum) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) {
+    return false;
+  }
+
+  return datum >= getTomorrowDateLocal();
+};
+
+const formatDatumZaPrikaz = (datum) => {
+  const parsed = normalizeDateInput(datum);
+
+  if (!parsed) {
+    return "N/A";
+  }
+
+  return parsed.toLocaleDateString("hr-HR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
+const getFlightsForDate = (datum) => {
+  const parsed = normalizeDateInput(datum);
+
+  if (!parsed) {
+    return [];
+  }
+
+  const dayIndex = parsed.getDay();
+  return RASPORED_LETOVA[dayIndex] || [];
+};
+
+const getFlightDetailsForReservation = (rezervacija) => {
+  if (!rezervacija) {
+    return null;
+  }
+
+  const datum = normalizeDateInput(rezervacija.datum_leta || rezervacija.datum_polaska || rezervacija.datum_rezervacije);
+  const flights = getFlightsForDate(datum || rezervacija.datum_leta || rezervacija.datum_polaska || rezervacija.datum_rezervacije);
+  const flight = flights.find((item) => Number(item.id) === Number(rezervacija.let_id));
+  const destinacija = DESTINACIJE.find((item) => Number(item.id) === Number(rezervacija.destinacija_id));
+
+  return {
+    datum,
+    flight,
+    destinacija,
+    polazniDatumLabel: datum ? datum.toLocaleDateString("hr-HR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }) : "N/A",
+    polaznoVrijemeLabel: flight?.vrijeme || "N/A",
+    povratakLabel: flight?.povratak || "N/A",
+    letLabel: flight ? `Let ${flight.id}` : `Let #${rezervacija.let_id || "N/A"}`,
+    destinacijaLabel: destinacija?.grad || "Nepoznata",
+  };
+};
+
+const buildTicketQrPayload = (rezervacija, details) => {
+  return JSON.stringify({
+    rezervacija_id: rezervacija?.rezervacija_id ?? null,
+    korisnik: rezervacija?.ime_korisnika || rezervacija?.ime || null,
+    destinacija: details?.destinacijaLabel || null,
+    datum_leta: rezervacija?.datum_leta || null,
+    let_id: rezervacija?.let_id || null,
+    mjesta: Array.isArray(rezervacija?.mjesta)
+      ? rezervacija.mjesta.map((mjesto) => `${mjesto.red}${mjesto.kolona}`)
+      : [],
+  });
+};
+
 function RezervacijePageContent() {
   const [rezervacije, setRezervacije] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,12 +165,14 @@ function RezervacijePageContent() {
   const [uspjeh, setUspjeh] = useState("");
   const [selectedDestinacija, setSelectedDestinacija] = useState(null);
   const [selectedLet, setSelectedLet] = useState(null);
+  const [selectedDatumLeta, setSelectedDatumLeta] = useState(getTomorrowDateLocal());
   const [selectedMjesta, setSelectedMjesta] = useState([]);
   const [zauzetaMjesta, setZauzetaMjesta] = useState([]);
+  const [selectedRezervacija, setSelectedRezervacija] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const router = useRouter();
 
-  const datumLeta = getTodayDateLocal();
+  const dostupniLetovi = getFlightsForDate(selectedDatumLeta);
 
   useEffect(() => {
     // Fetch current user info
@@ -69,6 +199,18 @@ function RezervacijePageContent() {
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+    });
+  };
+
+  const formatDatumLeta = (vrijednost) => {
+    const parsed = normalizeDateInput(vrijednost);
+
+    if (!parsed) return "N/A";
+
+    return parsed.toLocaleDateString("hr-HR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
     });
   };
 
@@ -145,7 +287,7 @@ function RezervacijePageContent() {
       mode: "occupied",
       destinacija_id: String(selectedDestinacija.id),
       let_id: String(selectedLet.id),
-      datum_leta: datumLeta,
+      datum_leta: selectedDatumLeta,
     });
 
     fetch(`/api/rezervacija?${query.toString()}`)
@@ -160,7 +302,14 @@ function RezervacijePageContent() {
       .catch(() => {
         setZauzetaMjesta([]);
       });
-  }, [selectedDestinacija, selectedLet, datumLeta]);
+  }, [selectedDestinacija, selectedLet, selectedDatumLeta]);
+
+  useEffect(() => {
+    setSelectedLet(null);
+    setSelectedDestinacija(null);
+    setSelectedMjesta([]);
+    setZauzetaMjesta([]);
+  }, [selectedDatumLeta]);
 
   const toggleMjesto = (mjesto) => {
     const oznaka = `${mjesto.red}${mjesto.kolona}`;
@@ -198,6 +347,12 @@ function RezervacijePageContent() {
       return;
     }
 
+    if (!isFutureOrTodayLocal(selectedDatumLeta)) {
+      setGreska("Molimo odaberi budući datum za rezervaciju.");
+      setSubmitting(false);
+      return;
+    }
+
     if (selectedMjesta.length === 0) {
       setGreska("Molimo odaberi barem jedno mjesto sjedenja.");
       setSubmitting(false);
@@ -219,7 +374,7 @@ function RezervacijePageContent() {
       const payload = {
         destinacija_id: selectedDestinacija.id,
         let_id: selectedLet.id,
-        datum_leta: datumLeta,
+        datum_leta: selectedDatumLeta,
         datum_rezervacije: lokalniDatumRezervacije,
         ukupna_cijena: selectedDestinacija.cijena * selectedMjesta.length,
         status: "aktivna",
@@ -254,6 +409,7 @@ function RezervacijePageContent() {
       setSelectedDestinacija(null);
       setSelectedLet(null);
       setSelectedMjesta([]);
+      setSelectedDatumLeta(getTomorrowDateLocal());
       setUspjeh("Rezervacija je uspješno dodana.");
     } catch (err) {
       setGreska(err.message || "Došlo je do greške.");
@@ -283,6 +439,7 @@ function RezervacijePageContent() {
       setSelectedLet(null);
       setSelectedMjesta([]);
       setZauzetaMjesta([]);
+      setSelectedDatumLeta(getTomorrowDateLocal());
       setUspjeh("Sve rezervacije su obrisane.");
     } catch (err) {
       setGreska(err.message || "Došlo je do greške.");
@@ -291,9 +448,75 @@ function RezervacijePageContent() {
     }
   };
 
+  const closeRezervacijaDetails = () => {
+    setSelectedRezervacija(null);
+  };
+
+  const handleDownloadPdf = async (rezervacija) => {
+    if (!rezervacija) {
+      return;
+    }
+
+    const details = getFlightDetailsForReservation(rezervacija);
+
+    try {
+      const [{ jsPDF }, qrModule] = await Promise.all([import("jspdf"), import("qrcode")]);
+      const qrDataUrl = await qrModule.toDataURL(buildTicketQrPayload(rezervacija, details), {
+        errorCorrectionLevel: "M",
+        margin: 1,
+        scale: 5,
+        width: 220,
+      });
+
+      const doc = new jsPDF({ unit: "mm", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 16;
+      const cardWidth = pageWidth - margin * 2;
+
+      doc.setFillColor(10, 18, 40);
+      doc.roundedRect(margin, 18, cardWidth, 80, 5, 5, "F");
+
+      doc.setTextColor(147, 197, 253);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("AVIO APP", margin + 8, 30);
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.text(`Karta za rezervaciju #${rezervacija.rezervacija_id}`, margin + 8, 40);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.text(`Putnik: ${currentUser?.ime || rezervacija.ime_korisnika || rezervacija.ime || "N/A"}`, margin + 8, 50);
+      doc.text(`Destinacija: ${details?.destinacijaLabel || "Nepoznata"}`, margin + 8, 58);
+      doc.text(`Polazak: ${details?.polazniDatumLabel || "N/A"} u ${details?.polaznoVrijemeLabel || "N/A"}`, margin + 8, 66);
+      doc.text(`Let: ${details?.letLabel || `Let #${rezervacija.let_id || "N/A"}`}`, margin + 8, 74);
+      doc.text(`Mjesta: ${Array.isArray(rezervacija.mjesta) ? rezervacija.mjesta.map((mjesto) => `${mjesto.red}${mjesto.kolona}`).join(", ") : "N/A"}`, margin + 8, 82);
+
+      doc.addImage(qrDataUrl, "PNG", pageWidth - margin - 36, 28, 28, 28);
+
+      doc.setTextColor(148, 163, 184);
+      doc.setFontSize(9);
+      doc.text(`Status: ${rezervacija.status || "aktivna"}`, margin + 8, 102);
+      doc.text(`Cijena: ${formatCijena(rezervacija.ukupna_cijena)}`, margin + 8, 108);
+      doc.text(`Datum rezervacije: ${formatDatum(rezervacija.datum_rezervacije)}`, margin + 8, 114);
+
+      doc.setDrawColor(59, 130, 246);
+      doc.line(margin, 124, pageWidth - margin, 124);
+
+      doc.setTextColor(203, 213, 225);
+      doc.setFontSize(9);
+      doc.text("QR kod sadrži osnovne podatke za provjeru karte.", margin, 132);
+
+      doc.save(`avio-karta-${rezervacija.rezervacija_id}.pdf`);
+    } catch (error) {
+      setGreska(error?.message || "Greška pri generiranju PDF karte.");
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black px-6 py-12 md:px-10 md:py-12">
+      <div className="min-h-screen bg-transparent px-6 py-12 md:px-10 md:py-12">
         <div className="mx-auto max-w-7xl animate-pulse space-y-8">
           <div className="h-10 w-48 rounded bg-slate-800" />
           <div className="h-6 w-96 rounded bg-slate-800" />
@@ -309,12 +532,12 @@ function RezervacijePageContent() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black px-6 py-8 md:px-10 md:py-12">
+      <div className="min-h-screen bg-transparent px-6 py-8 md:px-10 md:py-12">
         <main className="mx-auto flex w-full max-w-7xl flex-col gap-12">
         <header className="border-b border-blue-500/20 pb-6 flex items-start justify-between gap-4">
           <div>
             <p className="text-lg font-bold tracking-[0.2em] text-blue-300">✈ AVIO APP - REZERVACIJE</p>
-            <h1 className="mt-3 text-4xl font-black text-white md:text-5xl">Odaberi putovanje i finalizuj rezervaciju</h1>
+            <h1 className="mt-3 text-4xl font-black text-white md:text-5xl">Odaberi putovanje i dovršite rezervaciju</h1>
             <div className="mt-4 inline-flex items-center rounded-lg bg-blue-950/40 px-4 py-2 text-sm font-semibold text-blue-200 ring-1 ring-blue-500/30">
               Ukupno rezervacija: {rezervacije.length}
               {currentUser && (
@@ -352,7 +575,7 @@ function RezervacijePageContent() {
         <section className="space-y-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">Dostupne destinacije</p>
-            <h2 className="mt-2 text-2xl font-bold text-white">Izaberi čelišta po želji</h2>
+            <h2 className="mt-2 text-2xl font-bold text-white">Izaberite destinaciju po želji</h2>
           </div>
 
           <div className="grid gap-6 md:grid-cols-3">
@@ -391,7 +614,7 @@ function RezervacijePageContent() {
 
         <section className="space-y-6 rounded-2xl border border-blue-500/30 bg-blue-950/40 p-8 backdrop-blur">
           <div>
-            <h2 className="text-2xl font-bold text-white">Finalizuj rezervaciju</h2>
+            <h2 className="text-2xl font-bold text-white">Dovršite rezervaciju</h2>
             <p className="mt-1 text-sm text-slate-400">
               {selectedDestinacija
                 ? `Putovanje do ${selectedDestinacija.grad}a za ${selectedDestinacija.cijena} EUR`
@@ -401,13 +624,48 @@ function RezervacijePageContent() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-3">
-              <h3 className="text-lg font-semibold text-white">Odaberi let</h3>
+              <h3 className="text-lg font-semibold text-white">Odaberi datum leta</h3>
+              <div className="grid gap-4 md:grid-cols-[320px_1fr] md:items-end">
+                <label className="space-y-2">
+                  <span className="block text-sm font-medium text-slate-300">Datum</span>
+                  <input
+                    type="date"
+                    min={getTomorrowDateLocal()}
+                    value={selectedDatumLeta}
+                    onChange={(e) => setSelectedDatumLeta(e.target.value)}
+                    className="w-full rounded-lg border border-blue-500/30 bg-slate-900/80 px-4 py-3 text-white outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-400/40"
+                  />
+                </label>
+
+                <div className="rounded-lg border border-blue-500/20 bg-slate-900/60 px-4 py-3 text-sm text-slate-300">
+                  <span className="font-semibold text-blue-300">Odabrani datum:</span>{" "}
+                  {formatDatumZaPrikaz(selectedDatumLeta)}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-end justify-between gap-4">
+                <h3 className="text-lg font-semibold text-white">Dostupni letovi za ovaj datum</h3>
+                <p className="text-sm text-slate-400">
+                  {dostupniLetovi.length > 0 ? `${dostupniLetovi.length} termina` : "Nema dostupnih termina"}
+                </p>
+              </div>
+
               <div className="grid gap-3 md:grid-cols-3">
-                {LETOVI.map((flight) => (
+                {dostupniLetovi.length === 0 ? (
+                  <div className="rounded-lg border border-blue-500/20 bg-blue-950/20 px-4 py-6 text-sm text-slate-300 md:col-span-3">
+                    Za odabrani datum trenutno nema dostupnih letova.
+                  </div>
+                ) : dostupniLetovi.map((flight) => {
+                  const destinacija = DESTINACIJE.find((item) => Number(item.id) === Number(flight.destinacija_id));
+
+                  return (
                   <div
                     key={flight.id}
                     onClick={() => {
                       setSelectedLet(flight);
+                      setSelectedDestinacija(destinacija || null);
                       setSelectedMjesta([]);
                     }}
                     className={`cursor-pointer rounded-lg border-2 p-4 transition ${
@@ -418,6 +676,7 @@ function RezervacijePageContent() {
                   >
                     <div className="space-y-2">
                       <p className="text-xs uppercase tracking-wider text-blue-300">Polazak</p>
+                      <p className="text-sm font-semibold text-white">{destinacija?.grad || "Nepoznata destinacija"}</p>
                       <p className="text-2xl font-bold text-white">{flight.vrijeme}</p>
                       <p className="text-xs text-slate-400">Povratak: {flight.povratak}</p>
                     </div>
@@ -427,7 +686,8 @@ function RezervacijePageContent() {
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -600,7 +860,16 @@ function RezervacijePageContent() {
               {rezervacije.map((r) => (
                 <article
                   key={r.rezervacija_id}
-                  className="rounded-2xl border border-blue-500/30 bg-blue-900/20 p-5 backdrop-blur transition hover:border-blue-400/50 hover:bg-blue-900/30 hover:-translate-y-0.5"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedRezervacija(r)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedRezervacija(r);
+                    }
+                  }}
+                  className="cursor-pointer rounded-2xl border border-blue-500/30 bg-blue-900/20 p-5 backdrop-blur transition hover:border-blue-400/50 hover:bg-blue-900/30 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-400/60"
                 >
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <div>
@@ -622,8 +891,10 @@ function RezervacijePageContent() {
                       <span className="font-medium text-white">{nazivDestinacije(r)}</span>
                     </div>
                     <div className="flex items-center justify-between border-b border-blue-500/20 pb-2">
-                      <span className="text-slate-400">Datum</span>
-                      <span className="font-medium text-white">{formatDatum(r.datum_rezervacije)}</span>
+                      <span className="text-slate-400">Datum polaska</span>
+                      <span className="font-medium text-white">
+                        {formatDatumLeta(r.datum_leta || r.datum_polaska || r.datum_rezervacije)}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Cijena</span>
@@ -635,9 +906,140 @@ function RezervacijePageContent() {
             </div>
           )}
         </section>
+
+        {selectedRezervacija && (() => {
+          const details = getFlightDetailsForReservation(selectedRezervacija);
+          const seats = Array.isArray(selectedRezervacija.mjesta)
+            ? selectedRezervacija.mjesta.map((mjesto) => `${mjesto.red}${mjesto.kolona}`).join(", ")
+            : "N/A";
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm" onClick={closeRezervacijaDetails}>
+              <div
+                className="w-full max-w-3xl overflow-hidden rounded-3xl border border-blue-500/30 bg-slate-950 shadow-2xl shadow-black/50"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-4 border-b border-blue-500/20 px-6 py-5">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">Detalji rezervacije</p>
+                    <h3 className="mt-2 text-2xl font-black text-white">#{selectedRezervacija.rezervacija_id}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeRezervacijaDetails}
+                    className="rounded-full border border-blue-400/30 bg-blue-950/50 px-3 py-2 text-sm font-semibold text-blue-200 transition hover:border-blue-300 hover:bg-blue-900/60"
+                  >
+                    Zatvori
+                  </button>
+                </div>
+
+                <div className="grid gap-6 px-6 py-6 lg:grid-cols-[1.3fr_0.7fr]">
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-blue-500/20 bg-blue-900/20 p-5">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <InfoRow label="Putnik" value={currentUser?.ime || selectedRezervacija.ime_korisnika || selectedRezervacija.ime || "N/A"} />
+                        <InfoRow label="Status" value={selectedRezervacija.status || "aktivna"} />
+                        <InfoRow label="Destinacija" value={details?.destinacijaLabel || "Nepoznata"} />
+                        <InfoRow label="Let" value={details?.letLabel || `Let #${selectedRezervacija.let_id || "N/A"}`} />
+                        <InfoRow label="Datum polaska" value={details?.polazniDatumLabel || "N/A"} />
+                        <InfoRow label="Vrijeme polaska" value={details?.polaznoVrijemeLabel || "N/A"} />
+                        <InfoRow label="Vrijeme povratka" value={details?.povratakLabel || "N/A"} />
+                        <InfoRow label="Sjedišta" value={seats} />
+                        <InfoRow label="Cijena" value={formatCijena(selectedRezervacija.ukupna_cijena)} />
+                        <InfoRow label="Datum rezervacije" value={formatDatum(selectedRezervacija.datum_rezervacije)} />
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-blue-500/20 bg-slate-900/70 p-5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">Napomena</p>
+                      <p className="mt-3 text-sm leading-6 text-slate-300">
+                        Ova karta sadrži osnovne podatke o letu i rezervaciji. QR kod može poslužiti za bržu provjeru podataka na šalteru ili pri ukrcaju.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-blue-500/20 bg-slate-900/80 p-5 text-center">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">QR kod</p>
+                      <div className="mt-4 flex justify-center">
+                        <TicketQr qrPayload={buildTicketQrPayload(selectedRezervacija, details)} />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPdf(selectedRezervacija)}
+                      className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-5 py-3 text-sm font-bold text-white transition hover:shadow-lg hover:shadow-blue-500/40"
+                    >
+                      Preuzmi PDF kartu
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
         </main>
       </div>
     </ProtectedRoute>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <div className="rounded-xl border border-blue-500/10 bg-slate-950/40 p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
+      <p className="mt-2 break-words text-sm font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function TicketQr({ qrPayload }) {
+  const [qrSrc, setQrSrc] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadQr = async () => {
+      try {
+        const qrModule = await import("qrcode");
+        const nextQr = await qrModule.toDataURL(qrPayload, {
+          errorCorrectionLevel: "M",
+          margin: 1,
+          scale: 6,
+          width: 240,
+        });
+
+        if (isMounted) {
+          setQrSrc(nextQr);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setQrSrc("");
+        }
+      }
+    };
+
+    loadQr();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [qrPayload]);
+
+  if (!qrSrc) {
+    return <div className="flex h-48 w-48 items-center justify-center rounded-2xl border border-dashed border-blue-500/30 bg-slate-950/60 text-xs text-slate-400">QR se učitava...</div>;
+  }
+
+  return (
+    <Image
+      src={qrSrc}
+      alt="QR kod karte"
+      width={192}
+      height={192}
+      unoptimized
+      className="h-48 w-48 rounded-2xl border border-blue-500/20 bg-white p-3"
+    />
   );
 }
 

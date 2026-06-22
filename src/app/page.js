@@ -1,6 +1,62 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCurrentUser = async () => {
+      try {
+        const response = await fetch("/api/auth/me");
+
+        if (!response.ok) {
+          if (isMounted) {
+            setCurrentUser(null);
+          }
+          return;
+        }
+
+        const user = await response.json();
+
+        if (isMounted) {
+          setCurrentUser(user);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setCurrentUser(null);
+        }
+      } finally {
+        if (isMounted) {
+          setAuthLoading(false);
+        }
+      }
+    };
+
+    loadCurrentUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      setCurrentUser(null);
+      router.push("/login");
+    }
+  };
+
   const topDestinacije = [
     { grad: "Istanbul", kod: "IST", cijena: "od 89 EUR" },
     { grad: "Rim", kod: "FCO", cijena: "od 109 EUR" },
@@ -14,23 +70,40 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black px-6 py-8 md:px-10 md:py-12">
+    <div className="min-h-screen bg-transparent px-6 py-8 md:px-10 md:py-12">
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-16">
         <header className="flex items-center justify-between border-b border-blue-500/20 pb-6">
           <p className="text-lg font-bold tracking-[0.2em] text-blue-300">AVIO APP</p>
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="rounded-lg border border-blue-400/50 bg-blue-950/30 px-5 py-2.5 text-sm font-semibold text-blue-200 transition hover:bg-blue-900/50 hover:border-blue-300"
-            >
-              Login
-            </Link>
-            <Link
-              href="/register"
-              className="rounded-lg border border-blue-400/50 bg-blue-950/30 px-5 py-2.5 text-sm font-semibold text-blue-200 transition hover:bg-blue-900/50 hover:border-blue-300"
-            >
-              Register
-            </Link>
+            {!authLoading && currentUser ? (
+              <>
+                <span className="hidden text-sm font-medium text-slate-300 sm:inline-block">
+                  {currentUser.ime || currentUser.email}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-lg border border-blue-400/50 bg-blue-950/30 px-5 py-2.5 text-sm font-semibold text-blue-200 transition hover:bg-blue-900/50 hover:border-blue-300"
+                >
+                  Odjava
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="rounded-lg border border-blue-400/50 bg-blue-950/30 px-5 py-2.5 text-sm font-semibold text-blue-200 transition hover:bg-blue-900/50 hover:border-blue-300"
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/register"
+                  className="rounded-lg border border-blue-400/50 bg-blue-950/30 px-5 py-2.5 text-sm font-semibold text-blue-200 transition hover:bg-blue-900/50 hover:border-blue-300"
+                >
+                  Register
+                </Link>
+              </>
+            )}
             <Link
               href="/rezervacije"
               className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/30"
