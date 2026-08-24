@@ -196,7 +196,7 @@ POST   /api/auth/login           - Prijava
 POST   /api/auth/register        - Registracija
 ```
 
-## 💻 Korišćenje
+## 💻 Korištenje
 
 ### Pretraga letova
 1. Na početnoj stranici unesite **polaznu lokaciju** i **odredišnu lokaciju**
