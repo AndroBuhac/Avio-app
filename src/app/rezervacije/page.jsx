@@ -740,14 +740,14 @@ function RezervacijePageContent() {
             <div className="space-y-3">
               <h3 className="text-lg font-semibold text-white">Odaberi datum leta</h3>
               <div className="grid gap-4 md:grid-cols-[320px_1fr] md:items-end">
-                <label className="space-y-2">
+                <label className="min-w-0 space-y-2">
                   <span className="block text-sm font-medium text-slate-300">Datum</span>
                   <input
                     type="date"
                     min={getTomorrowDateLocal()}
                     value={selectedDatumLeta}
                     onChange={(e) => setSelectedDatumLeta(e.target.value)}
-                    className="w-full rounded-lg border border-blue-500/30 bg-slate-900/80 px-4 py-3 text-white outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-400/40"
+                    className="block min-w-0 max-w-full rounded-lg border border-blue-500/30 bg-slate-900/80 px-4 py-3 text-white outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-400/40"
                   />
                 </label>
 
