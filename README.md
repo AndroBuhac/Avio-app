@@ -74,6 +74,7 @@ Kreiraj `.env.local` fajl u root direktorijumu sa sledećim varijablama:
 ```env
 # PostgreSQL konekcija
 DATABASE_URL=postgresql://username:password@localhost:5432/avio_app
+ADMIN_EMAIL=admin@example.com
 
 # Next.js
 NEXT_PUBLIC_APP_URL=http://localhost:3000
@@ -87,11 +88,13 @@ Kreiraj bazu podataka:
 createdb avio_app
 ```
 
-Pokreni migracije (ako su dostupne):
+Prvo pripremi osnovnu šemu aplikacije:
 
 ```bash
-npm run db:migrate
+npm run db:prepare
 ```
+
+Za postojeću bazu napravi backup prije pokretanja migracija sjedala. Nakon `db:prepare`, pokreni `002_copy_karta_seats_to_rezervacija_mjesto.sql`, provjeri rezultate pomoću `003_verify_seat_migration.sql`, a tek zatim pokreni `001_drop_broj_sjedala_from_karta.sql`.
 
 ## 🚀 Pokretanje
 
@@ -143,6 +146,8 @@ Avio-app/
 ## 🗄️ Baza podataka
 
 ### PostgreSQL šema
+
+Napomena: u trenutnoj implementaciji podaci o sjedalu se čuvaju samo kroz `rezervacija_mjesto` kao kombinacija `red` + `kolona`. Tablica `karta` ne bi trebala duplirati isti podatak u polju poput `broj_sjedala`.
 
 Glavne tabele u bazi podataka:
 
@@ -221,15 +226,19 @@ POST   /api/auth/register        - Registracija
 
 ### Deployment na Vercel (preporučeno za Next.js)
 
-```bash
-# Instaliraj Vercel CLI
-npm install -g vercel
+1. Napravi backup postojeće PostgreSQL baze i pripremi Neon bazu.
+2. Lokalno postavi Neon connection string u `DATABASE_URL` i pokreni `npm run db:prepare`.
+3. Pokreni migracije sjedala prema redoslijedu navedenom u odjeljku baze podataka.
+4. Pushaj projekt na GitHub.
+5. U Vercelu odaberi **Add New Project** → **Import Git Repository**.
+6. U **Project Settings** → **Environment Variables** dodaj:
 
-# Deploy
-vercel
+```env
+DATABASE_URL=postgresql://...
+ADMIN_EMAIL=admin@example.com
 ```
 
-**Važno**: Postavite environment varijable za PostgreSQL u Vercel dashboard-u.
+`DATABASE_URL` i `ADMIN_EMAIL` postavi za **Production** i **Preview**. Vercel će automatski pokrenuti `npm run build` za Next.js projekt. `DATABASE_URL` nemoj nazivati `NEXT_PUBLIC_DATABASE_URL`, jer bi se tada tajna mogla izložiti klijentskom kodu.
 
 ### Deployment na drugi hosting
 

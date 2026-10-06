@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
-import pool, { ensureAuthSchema } from "@/lib/db";
+import pool from "@/lib/db";
 import { hashPassword, validateEmail, validatePassword, generateSessionToken } from "@/lib/auth";
 
-const ADMIN_EMAIL = "andro.buhac@gmail.com";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "andro.buhac@gmail.com";
 
 export async function POST(request) {
   try {
-    // Bootstrap schema on first request
-    await ensureAuthSchema();
-
     const { email, password, ime } = await request.json();
 
     // Validation

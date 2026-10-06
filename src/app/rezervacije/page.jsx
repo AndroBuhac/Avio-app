@@ -5,9 +5,10 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/app/ProtectedRoute";
+import { formatSeatLabel } from "@/lib/seat";
 
 const DESTINACIJE = [
-  { id: 1, grad: "Istanbul", kod: "IST", cijena: 89 },
+  { id: 1, grad: "London", kod: "LHR", cijena: 89 },
   { id: 2, grad: "Rim", kod: "FCO", cijena: 109 },
   { id: 3, grad: "Berlin", kod: "BER", cijena: 139 },
 ];
@@ -43,7 +44,9 @@ const RASPORED_LETOVA = {
 
 const REDOVI = [1, 2, 3, 4, 5, 6];
 const KOLONE = ["A", "B", "C", "D", "E", "F"];
-const MJESTA = REDOVI.flatMap((red) => KOLONE.map((kolona) => ({ id: `${red}${kolona}`, red, kolona })));
+const MJESTA = REDOVI.flatMap((red) =>
+  KOLONE.map((kolona) => ({ id: formatSeatLabel(red, kolona), red, kolona }))
+);
 
 const getTodayDateLocal = () => {
   const today = new Date();
@@ -151,7 +154,7 @@ const buildTicketQrPayload = (rezervacija, details) => {
     datum_leta: rezervacija?.datum_leta || null,
     let_id: rezervacija?.let_id || null,
     mjesta: Array.isArray(rezervacija?.mjesta)
-      ? rezervacija.mjesta.map((mjesto) => `${mjesto.red}${mjesto.kolona}`)
+      ? rezervacija.mjesta.map((mjesto) => formatSeatLabel(mjesto.red, mjesto.kolona))
       : [],
   });
 };
@@ -161,6 +164,8 @@ function RezervacijePageContent() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [brisanje, setBrisanje] = useState(false);
+  const [otkazivanjeRezervacijeId, setOtkazivanjeRezervacijeId] = useState(null);
+  const [cancelDialogReservationId, setCancelDialogReservationId] = useState(null);
   const [greska, setGreska] = useState("");
   const [uspjeh, setUspjeh] = useState("");
   const [selectedDestinacija, setSelectedDestinacija] = useState(null);
@@ -260,6 +265,10 @@ function RezervacijePageContent() {
     return "bg-blue-100 text-blue-700 ring-blue-200";
   };
 
+  const canCancelReservation = (rezervacija) => {
+    return String(rezervacija?.status || "aktivna").trim().toLowerCase() === "aktivna";
+  };
+
   useEffect(() => {
     fetch("/api/rezervacija")
       .then(async (res) => ({ ok: res.ok, data: await res.json() }))
@@ -312,7 +321,7 @@ function RezervacijePageContent() {
   }, [selectedDatumLeta]);
 
   const toggleMjesto = (mjesto) => {
-    const oznaka = `${mjesto.red}${mjesto.kolona}`;
+    const oznaka = formatSeatLabel(mjesto.red, mjesto.kolona);
 
     if (zauzetaMjesta.includes(oznaka)) {
       return;
@@ -402,7 +411,7 @@ function RezervacijePageContent() {
       setZauzetaMjesta((prev) => {
         const next = new Set(prev);
         selectedMjesta.forEach((mjesto) => {
-          next.add(`${mjesto.red}${mjesto.kolona}`);
+          next.add(formatSeatLabel(mjesto.red, mjesto.kolona));
         });
         return Array.from(next);
       });
@@ -448,6 +457,98 @@ function RezervacijePageContent() {
     }
   };
 
+  const handleOtkaziRezervaciju = async (rezervacijaId) => {
+    const parsedRezervacijaId = Number(rezervacijaId);
+    if (!Number.isInteger(parsedRezervacijaId) || parsedRezervacijaId <= 0) {
+      return;
+    }
+
+    const targetRezervacija =
+      rezervacije.find((item) => Number(item.rezervacija_id) === parsedRezervacijaId) ||
+      (Number(selectedRezervacija?.rezervacija_id) === parsedRezervacijaId ? selectedRezervacija : null);
+
+    if (!targetRezervacija || !canCancelReservation(targetRezervacija)) {
+      return;
+    }
+
+    const mjestaLabels = Array.isArray(targetRezervacija.mjesta)
+      ? targetRezervacija.mjesta.map((mjesto) => formatSeatLabel(mjesto.red, mjesto.kolona))
+      : [];
+
+    setGreska("");
+    setUspjeh("");
+    setOtkazivanjeRezervacijeId(parsedRezervacijaId);
+
+    try {
+      const res = await fetch("/api/rezervacija", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ rezervacija_id: parsedRezervacijaId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri otkazivanju rezervacije.");
+      }
+
+      setRezervacije((prev) =>
+        prev.map((item) =>
+          Number(item.rezervacija_id) === parsedRezervacijaId
+            ? {
+                ...item,
+                status: "otkazana",
+                mjesta: [],
+              }
+            : item
+        )
+      );
+
+      setSelectedRezervacija((prev) => {
+        if (!prev || Number(prev.rezervacija_id) !== parsedRezervacijaId) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          status: "otkazana",
+          mjesta: [],
+        };
+      });
+
+      setZauzetaMjesta((prev) => prev.filter((oznaka) => !mjestaLabels.includes(oznaka)));
+      setUspjeh(`Rezervacija #${parsedRezervacijaId} je uspješno otkazana.`);
+    } catch (err) {
+      setGreska(err.message || "Došlo je do greške pri otkazivanju.");
+    } finally {
+      setOtkazivanjeRezervacijeId(null);
+    }
+  };
+
+  const openCancelDialog = (rezervacijaId) => {
+    const parsedRezervacijaId = Number(rezervacijaId);
+    if (!Number.isInteger(parsedRezervacijaId) || parsedRezervacijaId <= 0) {
+      return;
+    }
+
+    setCancelDialogReservationId(parsedRezervacijaId);
+  };
+
+  const closeCancelDialog = () => {
+    setCancelDialogReservationId(null);
+  };
+
+  const confirmCancelReservation = async () => {
+    if (!cancelDialogReservationId) {
+      return;
+    }
+
+    const targetId = cancelDialogReservationId;
+    setCancelDialogReservationId(null);
+    await handleOtkaziRezervaciju(targetId);
+  };
+
   const closeRezervacijaDetails = () => {
     setSelectedRezervacija(null);
   };
@@ -491,7 +592,13 @@ function RezervacijePageContent() {
       doc.text(`Destinacija: ${details?.destinacijaLabel || "Nepoznata"}`, margin + 8, 58);
       doc.text(`Polazak: ${details?.polazniDatumLabel || "N/A"} u ${details?.polaznoVrijemeLabel || "N/A"}`, margin + 8, 66);
       doc.text(`Let: ${details?.letLabel || `Let #${rezervacija.let_id || "N/A"}`}`, margin + 8, 74);
-      doc.text(`Mjesta: ${Array.isArray(rezervacija.mjesta) ? rezervacija.mjesta.map((mjesto) => `${mjesto.red}${mjesto.kolona}`).join(", ") : "N/A"}`, margin + 8, 82);
+      doc.text(
+        `Mjesta: ${Array.isArray(rezervacija.mjesta)
+          ? rezervacija.mjesta.map((mjesto) => formatSeatLabel(mjesto.red, mjesto.kolona)).join(", ")
+          : "N/A"}`,
+        margin + 8,
+        82
+      );
 
       doc.addImage(qrDataUrl, "PNG", pageWidth - margin - 36, 28, 28, 28);
 
@@ -553,6 +660,14 @@ function RezervacijePageContent() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {currentUser?.is_admin && (
+              <Link
+                href="/admin"
+                className="mt-2 rounded-lg border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/20"
+              >
+                Admin panel
+              </Link>
+            )}
             <button
               onClick={handleLogout}
               className="mt-2 px-4 py-2 rounded-lg border border-red-500/30 bg-red-900/20 text-red-200 hover:bg-red-900/40 hover:border-red-400/50 transition text-sm font-semibold"
@@ -711,7 +826,7 @@ function RezervacijePageContent() {
                         <div key={red} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 md:gap-3">
                           <div className="grid grid-cols-3 gap-2">
                             {lijevaStrana.map((mjesto) => {
-                              const oznaka = `${mjesto.red}${mjesto.kolona}`;
+                              const oznaka = formatSeatLabel(mjesto.red, mjesto.kolona);
                               const zauzeto = zauzetaMjesta.includes(oznaka);
                               const odabrano = selectedMjesta.some((item) => item.id === mjesto.id);
 
@@ -741,7 +856,7 @@ function RezervacijePageContent() {
 
                           <div className="grid grid-cols-3 gap-2">
                             {desnaStrana.map((mjesto) => {
-                              const oznaka = `${mjesto.red}${mjesto.kolona}`;
+                              const oznaka = formatSeatLabel(mjesto.red, mjesto.kolona);
                               const zauzeto = zauzetaMjesta.includes(oznaka);
                               const odabrano = selectedMjesta.some((item) => item.id === mjesto.id);
 
@@ -800,9 +915,7 @@ function RezervacijePageContent() {
                     <span className="text-slate-300">Mjesta:</span>
                     <span className="font-semibold text-blue-300">
                       {selectedMjesta.length > 0
-                        ? selectedMjesta
-                            .map((mjesto) => `${mjesto.red}${mjesto.kolona}`)
-                            .join(", ")
+                        ? selectedMjesta.map((mjesto) => formatSeatLabel(mjesto.red, mjesto.kolona)).join(", ")
                         : "-"}
                     </span>
                   </div>
@@ -901,6 +1014,23 @@ function RezervacijePageContent() {
                       <span className="font-semibold text-blue-300">{formatCijena(r.ukupna_cijena)}</span>
                     </div>
                   </div>
+
+                  {canCancelReservation(r) && (
+                    <div className="mt-4 border-t border-blue-500/20 pt-4">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          openCancelDialog(r.rezervacija_id);
+                        }}
+                        disabled={otkazivanjeRezervacijeId === r.rezervacija_id}
+                        className="w-full rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {otkazivanjeRezervacijeId === r.rezervacija_id ? "Otkazivanje..." : "Otkaži rezervaciju"}
+                      </button>
+                    </div>
+                  )}
                 </article>
               ))}
             </div>
@@ -910,7 +1040,7 @@ function RezervacijePageContent() {
         {selectedRezervacija && (() => {
           const details = getFlightDetailsForReservation(selectedRezervacija);
           const seats = Array.isArray(selectedRezervacija.mjesta)
-            ? selectedRezervacija.mjesta.map((mjesto) => `${mjesto.red}${mjesto.kolona}`).join(", ")
+            ? selectedRezervacija.mjesta.map((mjesto) => formatSeatLabel(mjesto.red, mjesto.kolona)).join(", ")
             : "N/A";
 
           return (
@@ -973,12 +1103,60 @@ function RezervacijePageContent() {
                     >
                       Preuzmi PDF kartu
                     </button>
+
+                    {canCancelReservation(selectedRezervacija) && (
+                      <button
+                        type="button"
+                        onClick={() => openCancelDialog(selectedRezervacija.rezervacija_id)}
+                        disabled={otkazivanjeRezervacijeId === selectedRezervacija.rezervacija_id}
+                        className="w-full rounded-xl border border-amber-400/40 bg-amber-500/10 px-5 py-3 text-sm font-bold text-amber-200 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {otkazivanjeRezervacijeId === selectedRezervacija.rezervacija_id
+                          ? "Otkazivanje..."
+                          : "Otkaži rezervaciju"}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
           );
         })()}
+
+        {cancelDialogReservationId && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
+            onClick={closeCancelDialog}
+          >
+            <div
+              className="w-full max-w-md rounded-2xl border border-amber-400/30 bg-slate-950 p-6 shadow-2xl shadow-black/50"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Potvrda otkazivanja</p>
+              <h3 className="mt-2 text-xl font-black text-white">Otkazati rezervaciju?</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                Potvrdom će rezervacija #{cancelDialogReservationId} biti označena kao otkazana i povezana sjedala će biti oslobođena.
+              </p>
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeCancelDialog}
+                  className="rounded-lg border border-slate-600 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-800"
+                >
+                  Odustani
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmCancelReservation}
+                  className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/20"
+                >
+                  Potvrdi otkazivanje
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         </main>
       </div>
     </ProtectedRoute>

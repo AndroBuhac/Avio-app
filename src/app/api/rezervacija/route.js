@@ -1,9 +1,9 @@
 import pool from "@/lib/db";
+import { formatSeatLabel } from "@/lib/seat";
 import { cookies } from "next/headers";
 
 const ALLOWED_STATUSI = ["aktivna", "otkazana", "zavrsena"];
 const ALLOWED_KOLONE = ["A", "B", "C", "D", "E", "F"];
-let schemaReadyPromise = null;
 
 const getAuthenticatedUserId = async () => {
   try {
@@ -28,39 +28,6 @@ const getAuthenticatedUserId = async () => {
     console.error("Auth error:", error);
     return null;
   }
-};
-
-const ensureSchema = async () => {
-  if (!schemaReadyPromise) {
-    schemaReadyPromise = (async () => {
-      await pool.query(`
-        ALTER TABLE rezervacija
-        ADD COLUMN IF NOT EXISTS destinacija_id INTEGER,
-        ADD COLUMN IF NOT EXISTS let_id INTEGER,
-        ADD COLUMN IF NOT EXISTS datum_leta DATE
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS rezervacija_mjesto (
-          rezervacija_mjesto_id SERIAL PRIMARY KEY,
-          rezervacija_id INTEGER NOT NULL REFERENCES rezervacija(rezervacija_id) ON DELETE CASCADE,
-          destinacija_id INTEGER NOT NULL,
-          let_id INTEGER NOT NULL,
-          datum_leta DATE NOT NULL,
-          red INTEGER NOT NULL CHECK (red BETWEEN 1 AND 6),
-          kolona VARCHAR(1) NOT NULL CHECK (kolona IN ('A', 'B', 'C', 'D', 'E', 'F')),
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `);
-
-      await pool.query(`
-        CREATE UNIQUE INDEX IF NOT EXISTS rezervacija_mjesto_uniq_let_sjedalo
-        ON rezervacija_mjesto (destinacija_id, let_id, datum_leta, red, kolona)
-      `);
-    })();
-  }
-
-  return schemaReadyPromise;
 };
 
 const formatLocalDateTime = (date) => {
@@ -112,14 +79,13 @@ const normalizeMjesta = (value) => {
         .trim()
         .toUpperCase();
 
-      return { red, kolona, id: `${red}${kolona}` };
+      return { red, kolona, id: formatSeatLabel(red, kolona) };
     })
     .filter((mjesto) => Number.isInteger(mjesto.red) && mjesto.red > 0 && mjesto.kolona);
 };
 
 export async function GET(request) {
   try {
-    await ensureSchema();
     const { searchParams } = new URL(request.url);
     const mode = searchParams.get("mode");
 
@@ -142,9 +108,13 @@ export async function GET(request) {
 
       const occupied = await pool.query(
         `
-        SELECT red, kolona
-        FROM rezervacija_mjesto
-        WHERE destinacija_id = $1 AND let_id = $2 AND datum_leta = $3
+        SELECT rm.red, rm.kolona
+        FROM rezervacija_mjesto rm
+        JOIN rezervacija r ON r.rezervacija_id = rm.rezervacija_id
+        WHERE rm.destinacija_id = $1
+          AND rm.let_id = $2
+          AND rm.datum_leta = $3
+          AND r.status = 'aktivna'
         ORDER BY red, kolona
         `,
         [destinacijaId, letId, datumLeta]
@@ -155,7 +125,7 @@ export async function GET(request) {
           occupied.rows.map((row) => ({
             red: row.red,
             kolona: row.kolona,
-            id: `${row.red}${row.kolona}`,
+            id: formatSeatLabel(row.red, row.kolona),
           }))
         ),
         { status: 200 }
@@ -213,8 +183,6 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    await ensureSchema();
-
     // Get authenticated user from session
     const authenticatedKorisnikId = await getAuthenticatedUserId();
     if (!authenticatedKorisnikId) {
@@ -499,6 +467,116 @@ export async function DELETE() {
       JSON.stringify({ message: "Sve rezervacije su obrisane." }),
       { status: 200 }
     );
+  } catch (err) {
+    console.error(err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+    });
+  }
+}
+
+export async function PATCH(request) {
+  try {
+    const authenticatedKorisnikId = await getAuthenticatedUserId();
+    if (!authenticatedKorisnikId) {
+      return new Response(JSON.stringify({ error: "Niste prijavljeni. Molimo prijavite se." }), {
+        status: 401,
+      });
+    }
+
+    const body = await request.json();
+    const rezervacijaId = Number(body?.rezervacija_id);
+
+    if (!Number.isInteger(rezervacijaId) || rezervacijaId <= 0) {
+      return new Response(JSON.stringify({ error: "Neispravan rezervacija_id." }), {
+        status: 400,
+      });
+    }
+
+    const rezervacijaResult = await pool.query(
+      `
+      SELECT rezervacija_id, korisnik_id, status, datum_leta
+      FROM rezervacija
+      WHERE rezervacija_id = $1
+      LIMIT 1
+      `,
+      [rezervacijaId]
+    );
+
+    if (rezervacijaResult.rowCount === 0) {
+      return new Response(JSON.stringify({ error: "Rezervacija nije pronađena." }), {
+        status: 404,
+      });
+    }
+
+    const rezervacija = rezervacijaResult.rows[0];
+
+    if (Number(rezervacija.korisnik_id) !== authenticatedKorisnikId) {
+      return new Response(JSON.stringify({ error: "Nemate ovlasti za ovu rezervaciju." }), {
+        status: 403,
+      });
+    }
+
+    if (rezervacija.status === "otkazana") {
+      return new Response(JSON.stringify({ error: "Rezervacija je već otkazana." }), {
+        status: 409,
+      });
+    }
+
+    if (rezervacija.status === "zavrsena") {
+      return new Response(JSON.stringify({ error: "Nije moguće otkazati završenu rezervaciju." }), {
+        status: 409,
+      });
+    }
+
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const updateResult = await client.query(
+        `
+        UPDATE rezervacija
+        SET status = 'otkazana'
+        WHERE rezervacija_id = $1
+          AND korisnik_id = $2
+          AND status = 'aktivna'
+        RETURNING *
+        `,
+        [rezervacijaId, authenticatedKorisnikId]
+      );
+
+      if (updateResult.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return new Response(
+          JSON.stringify({ error: "Samo aktivna rezervacija može biti otkazana." }),
+          { status: 409 }
+        );
+      }
+
+      await client.query(
+        `
+        DELETE FROM rezervacija_mjesto
+        WHERE rezervacija_id = $1
+        `,
+        [rezervacijaId]
+      );
+
+      await client.query("COMMIT");
+
+      return new Response(
+        JSON.stringify({
+          ...updateResult.rows[0],
+          mjesta: [],
+        }),
+        { status: 200 }
+      );
+    } catch (transactionError) {
+      await client.query("ROLLBACK");
+      throw transactionError;
+    } finally {
+      client.release();
+    }
   } catch (err) {
     console.error(err);
     return new Response(JSON.stringify({ error: err.message }), {

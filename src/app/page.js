@@ -58,7 +58,7 @@ export default function Home() {
   };
 
   const topDestinacije = [
-    { grad: "Istanbul", kod: "IST", cijena: "od 89 EUR" },
+    { grad: "London", kod: "LHR", cijena: "od 89 EUR" },
     { grad: "Rim", kod: "FCO", cijena: "od 109 EUR" },
     { grad: "Berlin", kod: "BER", cijena: "od 139 EUR" },
   ];

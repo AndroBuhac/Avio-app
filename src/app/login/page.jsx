@@ -59,7 +59,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="vasaemail@example.com"
               required
             />
@@ -71,7 +71,7 @@ export default function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Unesite vasu lozinku"
               required
             />
@@ -89,7 +89,7 @@ export default function LoginPage() {
         <p className="text-gray-600 text-center mt-6">
           Nemaš račun?{" "}
           <Link href="/register" className="text-blue-600 hover:text-blue-800 font-semibold">
-            Registruj se
+            Registriraj se
           </Link>
         </p>
       </div>

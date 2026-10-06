@@ -1,0 +1,1 @@
+export const formatSeatLabel = (red, kolona) => `${red}${kolona}`;
