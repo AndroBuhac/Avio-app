@@ -639,12 +639,12 @@ function RezervacijePageContent() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-transparent px-6 py-8 md:px-10 md:py-12">
-        <main className="mx-auto flex w-full max-w-7xl flex-col gap-12">
-        <header className="border-b border-blue-500/20 pb-6 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-lg font-bold tracking-[0.2em] text-blue-300">✈ AVIO APP - REZERVACIJE</p>
-            <h1 className="mt-3 text-4xl font-black text-white md:text-5xl">Odaberi putovanje i dovršite rezervaciju</h1>
+      <div className="min-h-screen min-w-0 bg-transparent px-4 py-6 sm:px-6 md:px-10 md:py-12">
+        <main className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-12">
+        <header className="flex flex-col items-start gap-5 border-b border-blue-500/20 pb-6 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-bold tracking-[0.15em] text-blue-300 sm:text-lg">✈ AVIO APP - REZERVACIJE</p>
+            <h1 className="mt-3 text-3xl font-black text-white sm:text-4xl md:text-5xl">Odaberi putovanje i dovršite rezervaciju</h1>
             <div className="mt-4 inline-flex items-center rounded-lg bg-blue-950/40 px-4 py-2 text-sm font-semibold text-blue-200 ring-1 ring-blue-500/30">
               Ukupno rezervacija: {rezervacije.length}
               {currentUser && (
@@ -659,7 +659,7 @@ function RezervacijePageContent() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:shrink-0">
             {currentUser?.is_admin && (
               <Link
                 href="/admin"
@@ -727,7 +727,7 @@ function RezervacijePageContent() {
           </div>
         </section>
 
-        <section className="space-y-6 rounded-2xl border border-blue-500/30 bg-blue-950/40 p-8 backdrop-blur">
+        <section className="min-w-0 space-y-6 rounded-2xl border border-blue-500/30 bg-blue-950/40 p-4 backdrop-blur sm:p-6 md:p-8">
           <div>
             <h2 className="text-2xl font-bold text-white">Dovršite rezervaciju</h2>
             <p className="mt-1 text-sm text-slate-400">
@@ -760,7 +760,7 @@ function RezervacijePageContent() {
             </div>
 
             <div className="space-y-3">
-              <div className="flex items-end justify-between gap-4">
+              <div className="flex flex-wrap items-end justify-between gap-2">
                 <h3 className="text-lg font-semibold text-white">Dostupni letovi za ovaj datum</h3>
                 <p className="text-sm text-slate-400">
                   {dostupniLetovi.length > 0 ? `${dostupniLetovi.length} termina` : "Nema dostupnih termina"}
@@ -823,8 +823,8 @@ function RezervacijePageContent() {
                       );
 
                       return (
-                        <div key={red} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 md:gap-3">
-                          <div className="grid grid-cols-3 gap-2">
+                        <div key={red} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 sm:gap-2 md:gap-3">
+                          <div className="grid min-w-0 grid-cols-3 gap-1 sm:gap-2">
                             {lijevaStrana.map((mjesto) => {
                               const oznaka = formatSeatLabel(mjesto.red, mjesto.kolona);
                               const zauzeto = zauzetaMjesta.includes(oznaka);
@@ -836,7 +836,7 @@ function RezervacijePageContent() {
                                   type="button"
                                   disabled={zauzeto}
                                   onClick={() => toggleMjesto(mjesto)}
-                                  className={`rounded-lg border px-2 py-2 text-sm font-semibold transition ${
+                                  className={`rounded-lg border px-1 py-2 text-xs font-semibold transition sm:px-2 sm:text-sm ${
                                     zauzeto
                                       ? "cursor-not-allowed border-slate-700 bg-slate-800/70 text-slate-500"
                                       : odabrano
@@ -850,11 +850,11 @@ function RezervacijePageContent() {
                             })}
                           </div>
 
-                          <div className="px-1 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 md:px-2">
+                          <div className="px-0 text-center text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-500 sm:px-1 sm:text-[10px] md:px-2">
                             Prolaz
                           </div>
 
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid min-w-0 grid-cols-3 gap-1 sm:gap-2">
                             {desnaStrana.map((mjesto) => {
                               const oznaka = formatSeatLabel(mjesto.red, mjesto.kolona);
                               const zauzeto = zauzetaMjesta.includes(oznaka);
@@ -866,7 +866,7 @@ function RezervacijePageContent() {
                                   type="button"
                                   disabled={zauzeto}
                                   onClick={() => toggleMjesto(mjesto)}
-                                  className={`rounded-lg border px-2 py-2 text-sm font-semibold transition ${
+                                  className={`rounded-lg border px-1 py-2 text-xs font-semibold transition sm:px-2 sm:text-sm ${
                                     zauzeto
                                       ? "cursor-not-allowed border-slate-700 bg-slate-800/70 text-slate-500"
                                       : odabrano
@@ -903,15 +903,15 @@ function RezervacijePageContent() {
               <div className="rounded-lg border border-blue-500/30 bg-slate-900/50 p-4 space-y-3">
                 <p className="text-xs uppercase tracking-wider text-blue-300 font-semibold">Sažetak rezervacije</p>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                     <span className="text-slate-300">Destinacija:</span>
                     <span className="font-semibold text-white">{selectedDestinacija.grad}</span>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                     <span className="text-slate-300">Polazak:</span>
                     <span className="font-semibold text-blue-300">{selectedLet.vrijeme}</span>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                     <span className="text-slate-300">Mjesta:</span>
                     <span className="font-semibold text-blue-300">
                       {selectedMjesta.length > 0
@@ -919,7 +919,7 @@ function RezervacijePageContent() {
                         : "-"}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between border-t border-blue-500/20 pt-2">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-blue-500/20 pt-2">
                     <span className="text-slate-300">Ukupna cijena:</span>
                     <span className="text-lg font-bold text-blue-300">
                       {selectedDestinacija.cijena * Math.max(selectedMjesta.length, 1)} EUR
@@ -1049,7 +1049,7 @@ function RezervacijePageContent() {
                 className="w-full max-w-3xl overflow-hidden rounded-3xl border border-blue-500/30 bg-slate-950 shadow-2xl shadow-black/50"
                 onClick={(event) => event.stopPropagation()}
               >
-                <div className="flex items-start justify-between gap-4 border-b border-blue-500/20 px-6 py-5">
+                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-blue-500/20 px-4 py-5 sm:px-6">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">Detalji rezervacije</p>
                     <h3 className="mt-2 text-2xl font-black text-white">#{selectedRezervacija.rezervacija_id}</h3>
@@ -1063,7 +1063,7 @@ function RezervacijePageContent() {
                   </button>
                 </div>
 
-                <div className="grid gap-6 px-6 py-6 lg:grid-cols-[1.3fr_0.7fr]">
+                <div className="grid max-h-[calc(100vh-9rem)] gap-6 overflow-y-auto px-4 py-6 sm:px-6 lg:grid-cols-[1.3fr_0.7fr]">
                   <div className="space-y-4">
                     <div className="rounded-2xl border border-blue-500/20 bg-blue-900/20 p-5">
                       <div className="grid gap-4 sm:grid-cols-2">

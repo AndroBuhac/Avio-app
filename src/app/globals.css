@@ -18,6 +18,13 @@ body {
   background: linear-gradient(145deg, var(--background), var(--background-soft));
   color: var(--foreground);
   font-family: var(--font-geist-sans), "Trebuchet MS", sans-serif;
+  overflow-x: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 [data-theme="light"] .fixed.right-4.top-4 {

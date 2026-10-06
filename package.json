@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:prepare": "node scripts/prepare-db.mjs"
+    "db:prepare": "node --env-file=.env.local scripts/prepare-db.mjs"
   },
   "dependencies": {
     "@neon/config": "^1.8.4",
