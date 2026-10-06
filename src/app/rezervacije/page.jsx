@@ -640,26 +640,15 @@ function RezervacijePageContent() {
   return (
     <ProtectedRoute>
       <div className="min-h-screen min-w-0 bg-transparent px-4 py-6 sm:px-6 md:px-10 md:py-12">
-        <main className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-12">
-        <header className="flex flex-col items-start gap-5 border-b border-blue-500/20 pb-6 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
-            <p className="text-sm font-bold tracking-[0.15em] text-blue-300 sm:text-lg">✈ AVIO APP - REZERVACIJE</p>
-            <h1 className="mt-3 text-3xl font-black text-white sm:text-4xl md:text-5xl">Odaberi putovanje i dovršite rezervaciju</h1>
-            <div className="mt-4 inline-flex items-center rounded-lg bg-blue-950/40 px-4 py-2 text-sm font-semibold text-blue-200 ring-1 ring-blue-500/30">
-              Ukupno rezervacija: {rezervacije.length}
-              {currentUser && (
-                <span className="ml-4 text-blue-300">
-                  Dobrodošao, <span className="text-blue-200">{currentUser.ime}</span>!
-                </span>
-              )}
-              {currentUser?.is_admin && (
-                <span className="ml-3 inline-flex items-center rounded-md border border-amber-300/40 bg-amber-500/20 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-amber-200">
-                  Admin
-                </span>
-              )}
+        <main className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-10">
+        <header className="rounded-2xl border border-blue-500/20 bg-blue-950/25 p-5 backdrop-blur sm:p-7">
+          <div className="flex flex-col items-start gap-6 border-b border-blue-500/20 pb-6 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-bold tracking-[0.15em] text-blue-300 sm:text-lg">✈ AVIO APP - REZERVACIJE</p>
+              <h1 className="mt-3 max-w-3xl text-3xl font-black text-white sm:text-4xl md:text-5xl">Odaberi putovanje i dovršite rezervaciju</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">Odaberite destinaciju, termin leta i sjedalo za svoje sljedeće putovanje.</p>
             </div>
-          </div>
-          <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:shrink-0">
+            <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:shrink-0">
             {currentUser?.is_admin && (
               <Link
                 href="/admin"
@@ -684,6 +673,16 @@ function RezervacijePageContent() {
                 <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
               </svg>
             </Link>
+            </div>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-3 text-sm font-semibold text-blue-200">
+            <span className="rounded-lg bg-blue-500/15 px-4 py-2 ring-1 ring-blue-500/25">Ukupno rezervacija: {rezervacije.length}</span>
+            {currentUser && <span className="text-blue-300">Dobrodošao, <span className="text-blue-200">{currentUser.ime}</span>!</span>}
+            {currentUser?.is_admin && (
+              <span className="inline-flex items-center rounded-md border border-amber-300/40 bg-amber-500/20 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-amber-200">
+                Admin
+              </span>
+            )}
           </div>
         </header>
 
